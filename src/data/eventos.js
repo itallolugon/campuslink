@@ -1,7 +1,7 @@
 export const eventos = [
   {
     id: 1,
-    titulo: "Semana de TI 2025",
+    titulo: "Semana de Tecnologia 2025",
     descricao: "Palestras, workshops e hackathon sobre as principais tendências em tecnologia da informação.",
     data: "2025-05-15",
     horario: "08:00",
