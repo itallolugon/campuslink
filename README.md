@@ -14,7 +14,7 @@ A **CampusLink** resolve um problema real de instituições de ensino: a falta d
 |---|---|
 | Itallo Lugon | [@itallolugon](https://github.com/itallolugon) |
 | Lorenzo Osorio | [@LorenzoOsorioGS](https://github.com/LorenzoOsorioGS) |
-| João Miguel | — | [@Joao1395271](https://github.com/Joao1395271) |
+| João Miguel | — | [@Joao1395271](https://github.com/Joao1395271)|
 | Kevin Kuznier | [@Kev3333](https://github.com/Kev3333) |
 
 ## 🚀 Como rodar
