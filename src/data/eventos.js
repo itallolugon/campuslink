@@ -1,4 +1,4 @@
-export const eventos = [
+export const eventosIniciais = [
   {
     id: 1,
     titulo: "Semana de Tecnologia 2025",
@@ -56,4 +56,3 @@ export const eventos = [
   },
 ];
 
-export const categorias = ["Todos", "Tecnologia", "Engenharia", "Direito"];

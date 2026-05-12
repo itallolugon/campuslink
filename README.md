@@ -60,3 +60,169 @@ src/
 ---
 
 > Trabalho Prático — Disciplina de Desenvolvimento Web · UNICESUSC 2025
+
+---
+
+## Relatório — Sprint N2
+
+**Disciplina:** Desenvolvimento de Sistemas  
+**Curso:** Análise e Desenvolvimento de Sistemas  
+**Instituição:** UNICESUSC  
+**Grupo:** Itallo Lugon, Lorenzo Osorio, João Miguel e Kevin Kuznier  
+**Aplicativo:** CampusLink — Plataforma de Eventos Acadêmicos  
+**Data:** Maio de 2025
+
+---
+
+### 1. Tema e Objetivo do Aplicativo
+
+O **CampusLink** é um mini aplicativo web desenvolvido em React que centraliza os eventos acadêmicos de uma instituição de ensino. O objetivo é permitir que alunos visualizem, filtrem, se inscrevam e acompanhem eventos como palestras, workshops, hackathons e jornadas acadêmicas, tudo em uma interface simples e responsiva.
+
+---
+
+### 2. Funcionalidades Implementadas
+
+#### 2.1 Menu de Navegação com 3 Páginas
+
+A navegação é gerenciada por um estado `pagina` no `App.jsx`, sem necessidade de bibliotecas externas de roteamento. O componente `Header` recebe as props `pagina` e `onNavegar` e renderiza três botões funcionais:
+
+- **Eventos** — listagem completa com busca e filtro por categoria
+- **Cadastrar Evento** — formulário para adicionar novos eventos
+- **Minhas Inscrições** — página pessoal com os eventos em que o usuário se inscreveu
+
+```jsx
+// App.jsx
+const [pagina, setPagina] = useState('eventos');
+
+{pagina === 'eventos'    && <PaginaEventos ... />}
+{pagina === 'cadastrar'  && <FormEvento ... />}
+{pagina === 'inscricoes' && <MinhasInscricoes ... />}
+```
+
+#### 2.2 Formulário Controlado com useState
+
+O componente `FormEvento.jsx` implementa um formulário totalmente controlado com 8 campos gerenciados por um único `useState`:
+
+| Campo | Tipo |
+|---|---|
+| Título | text |
+| Descrição | textarea |
+| Data | date |
+| Horário | time |
+| Local | text |
+| Número de Vagas | number |
+| Categoria | select |
+| Organizador | text |
+
+```jsx
+// FormEvento.jsx
+const [form, setForm] = useState({
+  titulo: '', descricao: '', data: '', horario: '',
+  local: '', vagas: '', categoria: 'Tecnologia', organizador: '',
+});
+
+function handleChange(e) {
+  const { name, value } = e.target;
+  setForm(prev => ({ ...prev, [name]: value }));
+}
+```
+
+O formulário inclui validação: campos obrigatórios são verificados antes do envio, com mensagens de erro exibidas individualmente por campo.
+
+#### 2.3 Listagem Dinâmica dos Itens Cadastrados
+
+Os eventos cadastrados via formulário são adicionados ao estado global `eventos` no `App.jsx` e aparecem imediatamente na página de listagem sem necessidade de recarregar. As categorias dos novos eventos surgem automaticamente nos filtros, pois são calculadas dinamicamente:
+
+```jsx
+// App.jsx
+function handleCadastrar(novoEvento) {
+  setEventos(prev => [...prev, { ...novoEvento, id: Date.now() }]);
+  setPagina('eventos');
+}
+
+const categorias = ['Todos', ...new Set(eventos.map(ev => ev.categoria))];
+```
+
+#### 2.4 Persistência com localStorage
+
+Os dados de eventos e inscrições são persistidos no `localStorage` do navegador via `useEffect`. Ao recarregar a página, os dados são recuperados automaticamente:
+
+```jsx
+// App.jsx — carregamento inicial
+const [eventos, setEventos] = useState(
+  () => carregarStorage('campuslink_eventos', eventosIniciais)
+);
+const [inscritos, setInscritos] = useState(
+  () => carregarStorage('campuslink_inscritos', [])
+);
+
+// Salvamento automático a cada mudança
+useEffect(() => {
+  localStorage.setItem('campuslink_eventos', JSON.stringify(eventos));
+}, [eventos]);
+
+useEffect(() => {
+  localStorage.setItem('campuslink_inscritos', JSON.stringify(inscritos));
+}, [inscritos]);
+```
+
+#### 2.5 Componentes em Arquivos .jsx Separados
+
+O projeto possui 5 componentes independentes:
+
+| Componente | Responsabilidade |
+|---|---|
+| `Header.jsx` | Navegação entre páginas |
+| `EventCard.jsx` | Card individual de evento com inscrição/cancelamento |
+| `Filtro.jsx` | Botões de filtro por categoria |
+| `FormEvento.jsx` | Formulário controlado de cadastro |
+| `MinhasInscricoes.jsx` | Página de inscrições do usuário |
+
+---
+
+### 3. Organização dos Arquivos
+
+```
+src/
+├── components/
+│   ├── Header.jsx
+│   ├── Header.module.css
+│   ├── EventCard.jsx
+│   ├── EventCard.module.css
+│   ├── Filtro.jsx
+│   ├── Filtro.module.css
+│   ├── FormEvento.jsx
+│   ├── FormEvento.module.css
+│   ├── MinhasInscricoes.jsx
+│   └── MinhasInscricoes.module.css
+├── data/
+│   └── eventos.js
+├── App.jsx
+├── App.module.css
+└── index.css
+```
+
+---
+
+### 4. Tecnologias Utilizadas
+
+- **React 19** com Hooks (`useState`, `useEffect`)
+- **Vite 8** como bundler e servidor de desenvolvimento
+- **CSS Modules** para estilização com escopo por componente
+- **localStorage** para persistência de dados no navegador
+- **Google Fonts** (Syne + DM Sans)
+
+---
+
+### 5. Dificuldades e Aprendizados
+
+**Dificuldades encontradas:**
+- Gerenciar o estado global de eventos e inscrições em um único componente (`App.jsx`) e passar as funções corretas para cada página via props.
+- Implementar a validação do formulário campo a campo sem duplicar lógica.
+- Garantir que as categorias dos filtros se atualizassem dinamicamente ao cadastrar novos eventos com categorias inéditas.
+
+**Aprendizados:**
+- Compreensão prática do fluxo de dados unidirecional do React: estado no pai, funções passadas como props para os filhos.
+- Uso do `useEffect` com array de dependências para sincronizar estado com `localStorage`.
+- A diferença entre estado derivado (calculado na renderização) e estado armazenado, optando por calcular as categorias dinamicamente em vez de mantê-las em estado separado.
+- CSS Modules como solução para evitar conflitos de estilos entre componentes.
