@@ -166,16 +166,74 @@ useEffect(() => {
 }, [inscritos]);
 ```
 
-#### 2.5 Componentes em Arquivos .jsx Separados
+#### 2.5 CRUD Completo de Eventos
+
+Além do cadastro, a aplicação implementa edição e exclusão de eventos, completando o ciclo CRUD.
+
+**Edição (Update):** um estado `eventoEditando` guarda o evento selecionado. O `FormEvento` recebe o prop `eventoInicial`, pré-preenche os campos e adapta título e botão conforme o modo:
+
+```jsx
+// App.jsx
+const [eventoEditando, setEventoEditando] = useState(null);
+
+function handleEditar(evento) {
+  setEventoEditando(evento);
+  setPagina('cadastrar');
+}
+
+function handleCadastrar(dadosForm) {
+  if (eventoEditando) {
+    setEventos(prev => prev.map(ev =>
+      ev.id === eventoEditando.id ? { ...dadosForm, id: eventoEditando.id } : ev
+    ));
+    setEventoEditando(null);
+  } else {
+    setEventos(prev => [...prev, { ...dadosForm, id: Date.now() }]);
+  }
+  setPagina('eventos');
+}
+```
+
+**Exclusão (Delete):** remove o evento e cancela automaticamente qualquer inscrição vinculada:
+
+```jsx
+function handleDeletar(id) {
+  setEventos(prev => prev.filter(ev => ev.id !== id));
+  setInscritos(prev => prev.filter(i => i !== id));
+}
+```
+
+Os botões de editar/excluir aparecem apenas na listagem principal. Na página "Minhas Inscrições" o `EventCard` é usado sem esses props, então o usuário vê apenas as ações de inscrição:
+
+```jsx
+// EventCard.jsx
+{(onEditar || onDeletar) && (
+  <div className={styles.acoesAdmin}>
+    {onEditar && <button onClick={() => onEditar(evento)}>✏️ Editar</button>}
+    {onDeletar && <button onClick={() => onDeletar(evento.id)}>🗑️ Excluir</button>}
+  </div>
+)}
+```
+
+**Resumo do CRUD:**
+
+| Operação | Função | Local |
+|---|---|---|
+| **Create** | `handleCadastrar` (sem `eventoEditando`) | `App.jsx` |
+| **Read** | `carregarStorage` + `useEffect` | `App.jsx` |
+| **Update** | `handleCadastrar` (com `eventoEditando`) | `App.jsx` |
+| **Delete** | `handleDeletar` | `App.jsx` |
+
+#### 2.6 Componentes em Arquivos .jsx Separados
 
 O projeto possui 5 componentes independentes:
 
 | Componente | Responsabilidade |
 |---|---|
 | `Header.jsx` | Navegação entre páginas |
-| `EventCard.jsx` | Card individual de evento com inscrição/cancelamento |
+| `EventCard.jsx` | Card individual de evento com inscrição/cancelamento/edição/exclusão |
 | `Filtro.jsx` | Botões de filtro por categoria |
-| `FormEvento.jsx` | Formulário controlado de cadastro |
+| `FormEvento.jsx` | Formulário controlado de cadastro e edição |
 | `MinhasInscricoes.jsx` | Página de inscrições do usuário |
 
 ---
@@ -220,11 +278,12 @@ src/
 - Gerenciar o estado global de eventos e inscrições em um único componente (`App.jsx`) e passar as funções corretas para cada página via props.
 - Implementar a validação do formulário campo a campo sem duplicar lógica.
 - Garantir que as categorias dos filtros se atualizassem dinamicamente ao cadastrar novos eventos com categorias inéditas.
+- Reutilizar o mesmo `FormEvento` para criação e edição sem duplicar código, apenas diferenciando pelo prop `eventoInicial`.
+- Garantir que a exclusão de um evento também limpasse as inscrições vinculadas, mantendo consistência no localStorage.
 
 **Aprendizados:**
 - Compreensão prática do fluxo de dados unidirecional do React: estado no pai, funções passadas como props para os filhos.
 - Uso do `useEffect` com array de dependências para sincronizar estado com `localStorage`.
 - A diferença entre estado derivado (calculado na renderização) e estado armazenado, optando por calcular as categorias dinamicamente em vez de mantê-las em estado separado.
 - CSS Modules como solução para evitar conflitos de estilos entre componentes.
-
----
+- Renderização condicional de UI com base em props para controlar o que cada perfil de usuário enxerga na mesma tela.
