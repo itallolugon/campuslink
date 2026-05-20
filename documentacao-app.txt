@@ -1,0 +1,244 @@
+================================================================================
+  CAMPUSLINK — DOCUMENTACAO DO ESTADO ATUAL DO APLICATIVO
+  Foco: CRUD completo e persistencia com localStorage
+  Data: Maio de 2025
+================================================================================
+
+--------------------------------------------------------------------------------
+1. VISAO GERAL
+--------------------------------------------------------------------------------
+
+O CampusLink e uma aplicacao React (Vite) para gerenciamento de eventos
+academicos. O estado global e gerenciado exclusivamente no App.jsx e distribuido
+para os componentes filhos via props. Nao ha biblioteca de roteamento nem
+gerenciador de estado externo (Redux, Zustand, etc.) — tudo e useState/useEffect.
+
+Toda a persistencia de dados usa o localStorage do navegador. Ao fechar e
+reabrir a aba, eventos e inscricoes continuam intactos.
+
+--------------------------------------------------------------------------------
+2. ESTRUTURA DE DADOS
+--------------------------------------------------------------------------------
+
+Cada evento segue este formato:
+
+  {
+    id:          number   — identificador unico (Date.now() na criacao)
+    titulo:      string
+    descricao:   string
+    data:        string   — formato "YYYY-MM-DD"
+    horario:     string   — formato "HH:MM"
+    local:       string
+    vagas:       number
+    categoria:   string   — ex: "Tecnologia", "Saude", "Direito"
+    organizador: string
+  }
+
+A lista de inscritos e um array simples de IDs numericos:
+
+  inscritos: number[]   — ex: [1748234567890, 1748234512345]
+
+--------------------------------------------------------------------------------
+3. CHAVES DO LOCALSTORAGE
+--------------------------------------------------------------------------------
+
+  Chave                    Conteudo
+  -----------------------------------------------------------------------
+  campuslink_eventos       JSON.stringify(eventos[])   — array de eventos
+  campuslink_inscritos     JSON.stringify(inscritos[]) — array de IDs
+
+As chaves sao definidas diretamente nas chamadas de localStorage.setItem nos
+useEffect do App.jsx. Nao ha camada de abstracao adicional.
+
+--------------------------------------------------------------------------------
+4. CICLO DE VIDA DOS DADOS
+--------------------------------------------------------------------------------
+
+4.1 CARREGAMENTO INICIAL
+
+A funcao carregarStorage (App.jsx) e chamada como inicializador lazy do useState:
+
+  function carregarStorage(chave, fallback) {
+    try {
+      const salvo = localStorage.getItem(chave);
+      return salvo ? JSON.parse(salvo) : fallback;
+    } catch {
+      return fallback;
+    }
+  }
+
+  const [eventos, setEventos] = useState(
+    () => carregarStorage('campuslink_eventos', eventosIniciais)
+  );
+  const [inscritos, setInscritos] = useState(
+    () => carregarStorage('campuslink_inscritos', [])
+  );
+
+- Se o localStorage estiver vazio (primeira visita), usa os dados de
+  src/data/eventos.js como fallback.
+- Se houver dados salvos, os dados do arquivo sao ignorados.
+- O try/catch protege contra JSON corrompido.
+
+4.2 SALVAMENTO AUTOMATICO
+
+Dois useEffect sincronizam os estados com o localStorage a cada mudanca:
+
+  useEffect(() => {
+    localStorage.setItem('campuslink_eventos', JSON.stringify(eventos));
+  }, [eventos]);
+
+  useEffect(() => {
+    localStorage.setItem('campuslink_inscritos', JSON.stringify(inscritos));
+  }, [inscritos]);
+
+Nao e necessario chamar save manualmente em nenhuma operacao — qualquer
+alteracao nos estados dispara automaticamente a gravacao.
+
+--------------------------------------------------------------------------------
+5. CRUD COMPLETO — FUNCOES E LOCALIZACAO
+--------------------------------------------------------------------------------
+
+5.1 CREATE — Criar evento
+
+  Funcao:    handleCadastrar(dadosForm)     — App.jsx, linha ~55
+  Disparo:   submit do FormEvento
+  Logica:    Se eventoEditando for null, cria novo objeto com id = Date.now()
+             e adiciona ao array via setEventos(prev => [...prev, novo]).
+
+  Fluxo:
+    Usuario clica em "Cadastrar Evento" no Header
+      -> App.jsx seta pagina = 'cadastrar'
+      -> FormEvento e renderizado sem eventoInicial (modo criacao)
+      -> Usuario preenche e submete
+      -> handleCadastrar adiciona ao estado
+      -> useEffect salva no localStorage
+      -> pagina volta para 'eventos'
+
+5.2 READ — Ler eventos
+
+  Funcao:    carregarStorage()              — App.jsx, linha ~10
+  Disparo:   Inicializacao do useState (uma unica vez, ao montar o App)
+  Logica:    Le do localStorage; se vazio, retorna eventosIniciais.
+
+  Exibicao:
+    - Todos os eventos: filtrados por categoria e texto de busca em tempo real
+    - Inscricoes do usuario: eventos cujo id esta em inscritos[]
+
+5.3 UPDATE — Editar evento
+
+  Funcao:    handleEditar(evento)           — App.jsx, linha ~43
+             handleCadastrar(dadosForm)     — App.jsx, linha ~55 (ramo else)
+  Disparo:   Botao "Editar" no EventCard (so aparece na lista principal)
+
+  Estado adicional:
+    const [eventoEditando, setEventoEditando] = useState(null);
+
+  Logica do handleEditar:
+    1. Armazena o evento em eventoEditando
+    2. Navega para pagina = 'cadastrar'
+    3. FormEvento recebe eventoInicial = eventoEditando e pre-preenche campos
+       (vagas e convertido para string pois o input type=number espera string)
+
+  Logica do handleCadastrar no modo edicao:
+    setEventos(prev => prev.map(ev =>
+      ev.id === eventoEditando.id ? { ...dadosForm, id: eventoEditando.id } : ev
+    ));
+    - O id original e preservado para nao quebrar as inscricoes vinculadas.
+    - eventoEditando e resetado para null apos salvar.
+
+  Cancelar edicao:
+    onVoltar no FormEvento chama setEventoEditando(null) e volta para 'eventos',
+    sem alterar nada.
+
+5.4 DELETE — Excluir evento
+
+  Funcao:    handleDeletar(id)              — App.jsx, linha ~49
+  Disparo:   Botao "Excluir" no EventCard (so aparece na lista principal)
+
+  Logica:
+    setEventos(prev => prev.filter(ev => ev.id !== id));
+    setInscritos(prev => prev.filter(i => i !== id));
+
+  - Remove o evento do array de eventos.
+  - Remove o id do array de inscritos para nao manter referencias orphas.
+  - Os dois useEffect salvam ambos os estados atualizados no localStorage.
+
+--------------------------------------------------------------------------------
+6. CONTROLE DE VISIBILIDADE DOS BOTOES ADMIN
+--------------------------------------------------------------------------------
+
+Os botoes "Editar" e "Excluir" ficam no EventCard mas so sao renderizados
+quando os props onEditar e/ou onDeletar sao fornecidos:
+
+  {(onEditar || onDeletar) && (
+    <div className={styles.acoesAdmin}>
+      {onEditar && <button onClick={() => onEditar(evento)}>Editar</button>}
+      {onDeletar && <button onClick={() => onDeletar(evento.id)}>Excluir</button>}
+    </div>
+  )}
+
+Contexto de uso:
+
+  Pagina "Eventos" (lista principal):
+    <EventCard onEditar={handleEditar} onDeletar={handleDeletar} ... />
+    -> Botoes de admin aparecem
+
+  Pagina "Minhas Inscricoes" (MinhasInscricoes.jsx):
+    <EventCard onInscrever={() => {}} onCancelar={onCancelar} ... />
+    -> onEditar e onDeletar nao sao passados -> botoes nao aparecem
+    -> Usuario ve apenas "Ver detalhes" e "Cancelar inscricao"
+
+--------------------------------------------------------------------------------
+7. COMPONENTES E SUAS RESPONSABILIDADES
+--------------------------------------------------------------------------------
+
+  App.jsx
+    - Estado global: eventos, inscritos, eventoEditando, pagina, busca, categoria
+    - Todas as funcoes CRUD
+    - Sincronizacao com localStorage via useEffect
+    - Renderizacao condicional de paginas
+
+  FormEvento.jsx
+    - Formulario controlado com 8 campos
+    - Validacao campo a campo antes do submit
+    - Modo criacao (eventoInicial = null) ou edicao (eventoInicial = objeto)
+    - Nao conhece localStorage; apenas chama onCadastrar()
+
+  EventCard.jsx
+    - Exibe dados de um evento
+    - Gerencia estado local de expansao (expandido)
+    - Botoes de inscricao/cancelamento sempre presentes
+    - Botoes de admin condicionais via props
+
+  MinhasInscricoes.jsx
+    - Lista apenas eventos cujo id esta em inscritos[]
+    - Reutiliza EventCard sem passar props de admin
+
+  Header.jsx
+    - Navegacao entre paginas via prop onNavegar
+    - Exibe contador de inscricoes
+
+  Filtro.jsx
+    - Botoes de categoria calculados dinamicamente a partir dos eventos atuais
+
+--------------------------------------------------------------------------------
+8. FLUXO COMPLETO DE UMA OPERACAO (EXEMPLO: EDITAR)
+--------------------------------------------------------------------------------
+
+  1. Usuario clica em "Editar" no card do evento X
+  2. EventCard chama onEditar(evento) -> App.jsx: handleEditar(evento)
+  3. App.jsx: setEventoEditando(evento) + setPagina('cadastrar')
+  4. FormEvento e montado com eventoInicial = evento
+  5. useState inicializa form com os dados do evento (vagas como string)
+  6. Titulo muda para "Editar Evento", botao para "Salvar Alteracoes"
+  7. Usuario edita campos e clica em "Salvar Alteracoes"
+  8. handleSubmit valida, chama onCadastrar(dadosForm)
+  9. App.jsx: handleCadastrar detecta eventoEditando != null
+  10. setEventos faz map: substitui o evento pelo id, preserva id original
+  11. setEventoEditando(null)
+  12. useEffect dispara: localStorage.setItem('campuslink_eventos', ...)
+  13. setPagina('eventos') -> usuario ve a lista atualizada
+
+================================================================================
+  FIM DA DOCUMENTACAO
+================================================================================

@@ -20,6 +20,7 @@ export default function App() {
   const [pagina, setPagina] = useState('eventos');
   const [eventos, setEventos] = useState(() => carregarStorage('campuslink_eventos', eventosIniciais));
   const [inscritos, setInscritos] = useState(() => carregarStorage('campuslink_inscritos', []));
+  const [eventoEditando, setEventoEditando] = useState(null);
   const [busca, setBusca] = useState('');
   const [categoriaAtiva, setCategoriaAtiva] = useState('Todos');
 
@@ -39,8 +40,25 @@ export default function App() {
     setInscritos(prev => prev.filter(i => i !== id));
   }
 
-  function handleCadastrar(novoEvento) {
-    setEventos(prev => [...prev, { ...novoEvento, id: Date.now() }]);
+  function handleEditar(evento) {
+    setEventoEditando(evento);
+    setPagina('cadastrar');
+  }
+
+  function handleDeletar(id) {
+    setEventos(prev => prev.filter(ev => ev.id !== id));
+    setInscritos(prev => prev.filter(i => i !== id));
+  }
+
+  function handleCadastrar(dadosForm) {
+    if (eventoEditando) {
+      setEventos(prev => prev.map(ev =>
+        ev.id === eventoEditando.id ? { ...dadosForm, id: eventoEditando.id } : ev
+      ));
+      setEventoEditando(null);
+    } else {
+      setEventos(prev => [...prev, { ...dadosForm, id: Date.now() }]);
+    }
     setPagina('eventos');
   }
 
@@ -122,6 +140,8 @@ export default function App() {
                       inscrito={inscritos.includes(ev.id)}
                       onInscrever={handleInscrever}
                       onCancelar={handleCancelar}
+                      onEditar={handleEditar}
+                      onDeletar={handleDeletar}
                     />
                   ))}
                 </div>
@@ -132,8 +152,9 @@ export default function App() {
 
         {pagina === 'cadastrar' && (
           <FormEvento
+            eventoInicial={eventoEditando}
             onCadastrar={handleCadastrar}
-            onVoltar={() => setPagina('eventos')}
+            onVoltar={() => { setEventoEditando(null); setPagina('eventos'); }}
           />
         )}
 

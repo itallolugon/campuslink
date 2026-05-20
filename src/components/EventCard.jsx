@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import styles from './EventCard.module.css';
 
-export default function EventCard({ evento, inscrito, onInscrever, onCancelar }) {
+export default function EventCard({ evento, inscrito, onInscrever, onCancelar, onEditar, onDeletar }) {
   const [expandido, setExpandido] = useState(false);
 
   const dataFormatada = new Date(evento.data + 'T00:00:00').toLocaleDateString('pt-BR', {
@@ -48,6 +48,21 @@ export default function EventCard({ evento, inscrito, onInscrever, onCancelar })
           </button>
         )}
       </div>
+
+      {(onEditar || onDeletar) && (
+        <div className={styles.acoesAdmin}>
+          {onEditar && (
+            <button className={styles.btnEditar} onClick={() => onEditar(evento)}>
+              ✏️ Editar
+            </button>
+          )}
+          {onDeletar && (
+            <button className={styles.btnDeletar} onClick={() => onDeletar(evento.id)}>
+              🗑️ Excluir
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }

@@ -16,8 +16,10 @@ const formInicial = {
   organizador: '',
 };
 
-export default function FormEvento({ onCadastrar, onVoltar }) {
-  const [form, setForm] = useState(formInicial);
+export default function FormEvento({ eventoInicial, onCadastrar, onVoltar }) {
+  const [form, setForm] = useState(
+    eventoInicial ? { ...eventoInicial, vagas: String(eventoInicial.vagas) } : formInicial
+  );
   const [erros, setErros] = useState({});
 
   function handleChange(e) {
@@ -53,8 +55,8 @@ export default function FormEvento({ onCadastrar, onVoltar }) {
       <button className={styles.btnVoltar} onClick={onVoltar}>← Voltar para Eventos</button>
 
       <div className={styles.topo}>
-        <h1 className={styles.titulo}>Cadastrar Novo Evento</h1>
-        <p className={styles.sub}>Preencha os dados para criar um evento acadêmico.</p>
+        <h1 className={styles.titulo}>{eventoInicial ? 'Editar Evento' : 'Cadastrar Novo Evento'}</h1>
+        <p className={styles.sub}>{eventoInicial ? 'Atualize os dados do evento.' : 'Preencha os dados para criar um evento acadêmico.'}</p>
       </div>
 
       <form className={styles.form} onSubmit={handleSubmit} noValidate>
@@ -168,7 +170,7 @@ export default function FormEvento({ onCadastrar, onVoltar }) {
             Cancelar
           </button>
           <button type="submit" className={styles.btnSalvar}>
-            Cadastrar Evento
+            {eventoInicial ? 'Salvar Alterações' : 'Cadastrar Evento'}
           </button>
         </div>
       </form>

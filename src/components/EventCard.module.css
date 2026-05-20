@@ -132,3 +132,44 @@
 .btnCancelar:hover {
   opacity: 0.8;
 }
+
+.acoesAdmin {
+  display: flex;
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+
+.acoesAdmin button {
+  flex: 1;
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-family: 'DM Sans', sans-serif;
+  font-weight: 500;
+  cursor: pointer;
+  border: none;
+  transition: opacity 0.2s, transform 0.1s;
+}
+
+.acoesAdmin button:active {
+  transform: scale(0.97);
+}
+
+.btnEditar {
+  background: var(--tag-bg);
+  color: var(--accent);
+}
+
+.btnEditar:hover {
+  opacity: 0.8;
+}
+
+.btnDeletar {
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+
+.btnDeletar:hover {
+  opacity: 0.8;
+}
