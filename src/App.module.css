@@ -136,6 +136,31 @@
   border-color: var(--accent);
 }
 
+/* Botão tema escuro/claro */
+.btnTema {
+  position: fixed;
+  bottom: 28px;
+  right: 28px;
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 20px;
+  cursor: pointer;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.12);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: box-shadow 0.2s, background 0.2s;
+  z-index: 150;
+}
+
+.btnTema:hover {
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+}
+
 /* Botão limpar filtros */
 .btnLimpar {
   margin-top: 12px;

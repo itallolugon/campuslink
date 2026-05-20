@@ -10,10 +10,6 @@ export default function Header({ pagina, onNavegar, totalInscritos }) {
   return (
     <header className={styles.header}>
       <div className={styles.inner}>
-        <div className={styles.logo} onClick={() => onNavegar('eventos')}>
-          <span className={styles.logoIcon}>🎓</span>
-          <span className={styles.logoText}>CampusLink</span>
-        </div>
         <nav className={styles.nav}>
           {links.map(link => (
             <button
@@ -28,6 +24,9 @@ export default function Header({ pagina, onNavegar, totalInscritos }) {
             </button>
           ))}
         </nav>
+        <div className={styles.logo} onClick={() => onNavegar('eventos')}>
+          <span className={styles.logoText}>CampusLink</span>
+        </div>
       </div>
     </header>
   );

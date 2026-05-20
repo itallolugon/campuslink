@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500&display=swap');
 
 :root {
   --primary: #1a237e;
@@ -16,19 +16,31 @@
   --danger-bg: #ffebee;
 }
 
+[data-theme="dark"] {
+  --primary: #3949ab;
+  --accent: #7986cb;
+  --accent-light: #9fa8da;
+  --bg: #0e1023;
+  --surface: #181d3b;
+  --border: #2a3060;
+  --text: #e8eaf6;
+  --text-muted: #7986cb;
+  --tag-bg: #1e2448;
+  --success: #66bb6a;
+  --success-bg: #1a2e1a;
+  --danger: #ef5350;
+  --danger-bg: #2e1a1a;
+}
+
 * {
   margin: 0;
   padding: 0;
   box-sizing: border-box;
+  font-family: 'Bebas Neue', sans-serif;
 }
 
 body {
-  font-family: 'DM Sans', sans-serif;
   background: var(--bg);
   color: var(--text);
   min-height: 100vh;
-}
-
-h1, h2, h3, h4 {
-  font-family: 'Syne', sans-serif;
 }

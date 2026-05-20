@@ -28,6 +28,14 @@ export default function App() {
   const [ordenacao, setOrdenacao] = useState('data');
   const [toast, setToast] = useState(null);
   const [confirmacaoDeletar, setConfirmacaoDeletar] = useState(null);
+  const [temaEscuro, setTemaEscuro] = useState(
+    () => localStorage.getItem('campuslink_tema') === 'escuro'
+  );
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', temaEscuro ? 'dark' : '');
+    localStorage.setItem('campuslink_tema', temaEscuro ? 'escuro' : 'claro');
+  }, [temaEscuro]);
 
   useEffect(() => {
     localStorage.setItem('campuslink_eventos', JSON.stringify(eventos));
@@ -220,6 +228,14 @@ export default function App() {
       <footer className={styles.footer}>
         <p>CampusLink © 2025 · Desenvolvido por Itallo Lugon, Lorenzo Osorio, João Miguel e Kevin Kuznier</p>
       </footer>
+
+      <button
+        className={styles.btnTema}
+        onClick={() => setTemaEscuro(prev => !prev)}
+        title={temaEscuro ? 'Mudar para tema claro' : 'Mudar para tema escuro'}
+      >
+        {temaEscuro ? '☀' : '☾'}
+      </button>
 
       {toast && <Toast mensagem={toast.mensagem} tipo={toast.tipo} />}
 
