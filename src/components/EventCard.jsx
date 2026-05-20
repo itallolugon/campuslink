@@ -23,12 +23,12 @@ export default function EventCard({ evento, inscrito, onInscrever, onCancelar, o
         <span>👥 {evento.vagas} vagas</span>
       </div>
 
-      {expandido && (
+      <div className={`${styles.descricaoWrapper} ${expandido ? styles.aberto : ''}`}>
         <div className={styles.descricao}>
           <p>{evento.descricao}</p>
           <p className={styles.org}>Organizado por: <strong>{evento.organizador}</strong></p>
         </div>
-      )}
+      </div>
 
       <div className={styles.acoes}>
         <button
@@ -36,6 +36,7 @@ export default function EventCard({ evento, inscrito, onInscrever, onCancelar, o
           onClick={() => setExpandido(prev => !prev)}
         >
           {expandido ? 'Ocultar detalhes' : 'Ver detalhes'}
+          <span className={`${styles.chevron} ${expandido ? styles.chevronAberto : ''}`}>›</span>
         </button>
 
         {inscrito ? (
