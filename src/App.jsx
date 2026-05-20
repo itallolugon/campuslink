@@ -4,6 +4,8 @@ import EventCard from './components/EventCard';
 import Filtro from './components/Filtro';
 import FormEvento from './components/FormEvento';
 import MinhasInscricoes from './components/MinhasInscricoes';
+import Toast from './components/Toast';
+import ModalConfirmacao from './components/ModalConfirmacao';
 import { eventosIniciais } from './data/eventos';
 import styles from './App.module.css';
 
@@ -23,6 +25,9 @@ export default function App() {
   const [eventoEditando, setEventoEditando] = useState(null);
   const [busca, setBusca] = useState('');
   const [categoriaAtiva, setCategoriaAtiva] = useState('Todos');
+  const [ordenacao, setOrdenacao] = useState('data');
+  const [toast, setToast] = useState(null);
+  const [confirmacaoDeletar, setConfirmacaoDeletar] = useState(null);
 
   useEffect(() => {
     localStorage.setItem('campuslink_eventos', JSON.stringify(eventos));
@@ -32,12 +37,19 @@ export default function App() {
     localStorage.setItem('campuslink_inscritos', JSON.stringify(inscritos));
   }, [inscritos]);
 
+  function mostrarToast(mensagem, tipo = 'sucesso') {
+    setToast({ mensagem, tipo });
+    setTimeout(() => setToast(null), 3000);
+  }
+
   function handleInscrever(id) {
     setInscritos(prev => [...prev, id]);
+    mostrarToast('Inscrição realizada com sucesso!');
   }
 
   function handleCancelar(id) {
     setInscritos(prev => prev.filter(i => i !== id));
+    mostrarToast('Inscrição cancelada.', 'info');
   }
 
   function handleEditar(evento) {
@@ -46,8 +58,14 @@ export default function App() {
   }
 
   function handleDeletar(id) {
-    setEventos(prev => prev.filter(ev => ev.id !== id));
-    setInscritos(prev => prev.filter(i => i !== id));
+    setConfirmacaoDeletar(id);
+  }
+
+  function confirmarDeletar() {
+    setEventos(prev => prev.filter(ev => ev.id !== confirmacaoDeletar));
+    setInscritos(prev => prev.filter(i => i !== confirmacaoDeletar));
+    setConfirmacaoDeletar(null);
+    mostrarToast('Evento excluído.', 'info');
   }
 
   function handleCadastrar(dadosForm) {
@@ -56,19 +74,32 @@ export default function App() {
         ev.id === eventoEditando.id ? { ...dadosForm, id: eventoEditando.id } : ev
       ));
       setEventoEditando(null);
+      mostrarToast('Evento atualizado com sucesso!');
     } else {
       setEventos(prev => [...prev, { ...dadosForm, id: Date.now() }]);
+      mostrarToast('Evento cadastrado com sucesso!');
     }
     setPagina('eventos');
   }
 
   const categorias = ['Todos', ...new Set(eventos.map(ev => ev.categoria))];
 
-  const eventosFiltrados = eventos.filter(ev => {
-    const matchCategoria = categoriaAtiva === 'Todos' || ev.categoria === categoriaAtiva;
-    const matchBusca = ev.titulo.toLowerCase().includes(busca.toLowerCase());
-    return matchCategoria && matchBusca;
-  });
+  const eventosFiltrados = eventos
+    .filter(ev => {
+      const matchCategoria = categoriaAtiva === 'Todos' || ev.categoria === categoriaAtiva;
+      const termo = busca.toLowerCase();
+      const matchBusca = !termo ||
+        ev.titulo.toLowerCase().includes(termo) ||
+        ev.local.toLowerCase().includes(termo) ||
+        ev.organizador.toLowerCase().includes(termo) ||
+        ev.descricao.toLowerCase().includes(termo);
+      return matchCategoria && matchBusca;
+    })
+    .sort((a, b) => {
+      if (ordenacao === 'data') return new Date(a.data) - new Date(b.data);
+      if (ordenacao === 'vagas') return b.vagas - a.vagas;
+      return b.id - a.id;
+    });
 
   const eventosInscritos = eventos.filter(ev => inscritos.includes(ev.id));
 
@@ -87,7 +118,7 @@ export default function App() {
               <input
                 className={styles.busca}
                 type="text"
-                placeholder="🔍  Buscar evento..."
+                placeholder="🔍  Buscar por título, local ou organizador..."
                 value={busca}
                 onChange={e => setBusca(e.target.value)}
               />
@@ -124,12 +155,31 @@ export default function App() {
                 <h2>
                   {categoriaAtiva === 'Todos' ? 'Todos os Eventos' : categoriaAtiva}
                 </h2>
-                <span className={styles.count}>{eventosFiltrados.length} encontrado(s)</span>
+                <div className={styles.controles}>
+                  <span className={styles.count}>{eventosFiltrados.length} encontrado(s)</span>
+                  <select
+                    className={styles.ordenacaoSelect}
+                    value={ordenacao}
+                    onChange={e => setOrdenacao(e.target.value)}
+                  >
+                    <option value="data">Mais próximos</option>
+                    <option value="recentes">Mais recentes</option>
+                    <option value="vagas">Mais vagas</option>
+                  </select>
+                </div>
               </div>
 
               {eventosFiltrados.length === 0 ? (
                 <div className={styles.vazio}>
                   <p>Nenhum evento encontrado{busca ? ` para "${busca}"` : ''}.</p>
+                  {(busca || categoriaAtiva !== 'Todos') && (
+                    <button
+                      className={styles.btnLimpar}
+                      onClick={() => { setBusca(''); setCategoriaAtiva('Todos'); }}
+                    >
+                      Limpar filtros
+                    </button>
+                  )}
                 </div>
               ) : (
                 <div className={styles.grid}>
@@ -170,6 +220,16 @@ export default function App() {
       <footer className={styles.footer}>
         <p>CampusLink © 2025 · Desenvolvido por Itallo Lugon, Lorenzo Osorio, João Miguel e Kevin Kuznier</p>
       </footer>
+
+      {toast && <Toast mensagem={toast.mensagem} tipo={toast.tipo} />}
+
+      {confirmacaoDeletar !== null && (
+        <ModalConfirmacao
+          mensagem="Tem certeza que deseja excluir este evento? Esta ação não pode ser desfeita."
+          onConfirmar={confirmarDeletar}
+          onCancelar={() => setConfirmacaoDeletar(null)}
+        />
+      )}
     </>
   );
 }

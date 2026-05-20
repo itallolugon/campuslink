@@ -1,11 +1,11 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import styles from './FormEvento.module.css';
 
 const categoriasDisponiveis = [
   'Tecnologia', 'Engenharia', 'Direito', 'Saúde', 'Negócios', 'Arte & Cultura', 'Outro',
 ];
 
-const formInicial = {
+const formVazio = {
   titulo: '',
   descricao: '',
   data: '',
@@ -16,11 +16,25 @@ const formInicial = {
   organizador: '',
 };
 
+const hoje = new Date().toISOString().split('T')[0];
+
 export default function FormEvento({ eventoInicial, onCadastrar, onVoltar }) {
-  const [form, setForm] = useState(
-    eventoInicial ? { ...eventoInicial, vagas: String(eventoInicial.vagas) } : formInicial
-  );
+  const valorInicial = eventoInicial
+    ? { ...eventoInicial, vagas: String(eventoInicial.vagas) }
+    : formVazio;
+
+  const [form, setForm] = useState(valorInicial);
   const [erros, setErros] = useState({});
+  const estadoOriginal = useRef(valorInicial);
+
+  function estaAlterado() {
+    return JSON.stringify(form) !== JSON.stringify(estadoOriginal.current);
+  }
+
+  function handleVoltar() {
+    if (estaAlterado() && !window.confirm('Você tem alterações não salvas. Deseja sair sem salvar?')) return;
+    onVoltar();
+  }
 
   function handleChange(e) {
     const { name, value } = e.target;
@@ -32,10 +46,14 @@ export default function FormEvento({ eventoInicial, onCadastrar, onVoltar }) {
     const novos = {};
     if (!form.titulo.trim())      novos.titulo      = 'Título é obrigatório';
     if (!form.descricao.trim())   novos.descricao   = 'Descrição é obrigatória';
-    if (!form.data)               novos.data        = 'Data é obrigatória';
+    if (!form.data) {
+      novos.data = 'Data é obrigatória';
+    } else if (!eventoInicial && form.data < hoje) {
+      novos.data = 'A data do evento não pode ser no passado';
+    }
     if (!form.horario)            novos.horario     = 'Horário é obrigatório';
     if (!form.local.trim())       novos.local       = 'Local é obrigatório';
-    if (!form.vagas || Number(form.vagas) < 1) novos.vagas = 'Informe um número de vagas válido';
+    if (!form.vagas || Number(form.vagas) < 1) novos.vagas = 'Informe um número inteiro maior que 0';
     if (!form.organizador.trim()) novos.organizador = 'Organizador é obrigatório';
     return novos;
   }
@@ -52,7 +70,7 @@ export default function FormEvento({ eventoInicial, onCadastrar, onVoltar }) {
 
   return (
     <div className={styles.container}>
-      <button className={styles.btnVoltar} onClick={onVoltar}>← Voltar para Eventos</button>
+      <button className={styles.btnVoltar} onClick={handleVoltar}>← Voltar para Eventos</button>
 
       <div className={styles.topo}>
         <h1 className={styles.titulo}>{eventoInicial ? 'Editar Evento' : 'Cadastrar Novo Evento'}</h1>
@@ -96,6 +114,7 @@ export default function FormEvento({ eventoInicial, onCadastrar, onVoltar }) {
               name="data"
               value={form.data}
               onChange={handleChange}
+              min={!eventoInicial ? hoje : undefined}
               className={erros.data ? styles.inputErro : ''}
             />
             {erros.data && <span className={styles.erro}>{erros.data}</span>}
@@ -137,6 +156,7 @@ export default function FormEvento({ eventoInicial, onCadastrar, onVoltar }) {
               value={form.vagas}
               onChange={handleChange}
               min="1"
+              max="9999"
               placeholder="Ex: 50"
               className={erros.vagas ? styles.inputErro : ''}
             />
@@ -166,8 +186,8 @@ export default function FormEvento({ eventoInicial, onCadastrar, onVoltar }) {
         </div>
 
         <div className={styles.acoes}>
-          <button type="button" className={styles.btnCancelar} onClick={onVoltar}>
-            Cancelar
+          <button type="button" className={styles.btnCancelar} onClick={handleVoltar}>
+            Descartar
           </button>
           <button type="submit" className={styles.btnSalvar}>
             {eventoInicial ? 'Salvar Alterações' : 'Cadastrar Evento'}

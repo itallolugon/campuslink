@@ -112,6 +112,49 @@
   font-size: 15px;
 }
 
+/* Controles de ordenação */
+.controles {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.ordenacaoSelect {
+  padding: 6px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 13px;
+  font-family: 'DM Sans', sans-serif;
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.ordenacaoSelect:focus {
+  border-color: var(--accent);
+}
+
+/* Botão limpar filtros */
+.btnLimpar {
+  margin-top: 12px;
+  padding: 8px 20px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--accent);
+  font-size: 13px;
+  font-family: 'DM Sans', sans-serif;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.btnLimpar:hover {
+  background: var(--tag-bg);
+}
+
 /* Footer */
 .footer {
   text-align: center;
