@@ -6,6 +6,7 @@ import FormEvento from './components/FormEvento';
 import MinhasInscricoes from './components/MinhasInscricoes';
 import Toast from './components/Toast';
 import ModalConfirmacao from './components/ModalConfirmacao';
+import CampoBusca from './components/CampoBusca';
 import { eventosIniciais } from './data/eventos';
 import styles from './App.module.css';
 
@@ -26,6 +27,9 @@ export default function App() {
   const [busca, setBusca] = useState('');
   const [categoriaAtiva, setCategoriaAtiva] = useState('Todos');
   const [ordenacao, setOrdenacao] = useState('data');
+  const [historicoBusca, setHistoricoBusca] = useState(
+    () => carregarStorage('campuslink_historico', [])
+  );
   const [toast, setToast] = useState(null);
   const [confirmacaoDeletar, setConfirmacaoDeletar] = useState(null);
   const [temaEscuro, setTemaEscuro] = useState(
@@ -38,12 +42,24 @@ export default function App() {
   }, [temaEscuro]);
 
   useEffect(() => {
+    localStorage.setItem('campuslink_historico', JSON.stringify(historicoBusca));
+  }, [historicoBusca]);
+
+  useEffect(() => {
     localStorage.setItem('campuslink_eventos', JSON.stringify(eventos));
   }, [eventos]);
 
   useEffect(() => {
     localStorage.setItem('campuslink_inscritos', JSON.stringify(inscritos));
   }, [inscritos]);
+
+  function salvarBusca(termo) {
+    if (!termo || termo.trim().length < 2) return;
+    setHistoricoBusca(prev => {
+      const filtrado = prev.filter(t => t !== termo.trim());
+      return [termo.trim(), ...filtrado].slice(0, 5);
+    });
+  }
 
   function mostrarToast(mensagem, tipo = 'sucesso') {
     setToast({ mensagem, tipo });
@@ -123,12 +139,13 @@ export default function App() {
               <p className={styles.heroSub}>
                 Encontre e inscreva-se nos melhores eventos da sua instituição.
               </p>
-              <input
-                className={styles.busca}
-                type="text"
-                placeholder="🔍  Buscar por título, local ou organizador..."
+              <CampoBusca
                 value={busca}
                 onChange={e => setBusca(e.target.value)}
+                historico={historicoBusca}
+                onSalvar={salvarBusca}
+                onSelecionar={termo => setBusca(termo)}
+                onRemover={termo => setHistoricoBusca(prev => prev.filter(t => t !== termo))}
               />
             </section>
 
