@@ -1,7 +1,7 @@
 ================================================================================
   CAMPUSLINK — DOCUMENTACAO DO ESTADO ATUAL DO APLICATIVO
-  Foco: CRUD completo e persistencia com localStorage
-  Data: Maio de 2025
+  Foco: CRUD completo, localStorage, UX e funcionalidades adicionais
+  Data: Junho de 2025
 ================================================================================
 
 --------------------------------------------------------------------------------
@@ -11,10 +11,11 @@
 O CampusLink e uma aplicacao React (Vite) para gerenciamento de eventos
 academicos. O estado global e gerenciado exclusivamente no App.jsx e distribuido
 para os componentes filhos via props. Nao ha biblioteca de roteamento nem
-gerenciador de estado externo (Redux, Zustand, etc.) — tudo e useState/useEffect.
+gerenciador de estado externo — tudo e useState/useEffect.
 
 Toda a persistencia de dados usa o localStorage do navegador. Ao fechar e
-reabrir a aba, eventos e inscricoes continuam intactos.
+reabrir a aba, eventos, inscricoes, historico de busca e preferencia de tema
+continuam intactos.
 
 --------------------------------------------------------------------------------
 2. ESTRUTURA DE DADOS
@@ -36,7 +37,12 @@ Cada evento segue este formato:
 
 A lista de inscritos e um array simples de IDs numericos:
 
-  inscritos: number[]   — ex: [1748234567890, 1748234512345]
+  inscritos: number[]        — ex: [1748234567890, 1748234512345]
+
+O historico de busca e um array de strings:
+
+  historicoBusca: string[]   — ex: ["inteligencia", "hackathon", "direito"]
+                               maximo de 5 itens, mais recente primeiro
 
 --------------------------------------------------------------------------------
 3. CHAVES DO LOCALSTORAGE
@@ -44,19 +50,14 @@ A lista de inscritos e um array simples de IDs numericos:
 
   Chave                    Conteudo
   -----------------------------------------------------------------------
-  campuslink_eventos       JSON.stringify(eventos[])   — array de eventos
-  campuslink_inscritos     JSON.stringify(inscritos[]) — array de IDs
+  campuslink_eventos       JSON.stringify(eventos[])        — array de eventos
+  campuslink_inscritos     JSON.stringify(inscritos[])      — array de IDs
+  campuslink_historico     JSON.stringify(historico[])      — buscas recentes
+  campuslink_tema          string: "escuro" ou "claro"      — preferencia visual
 
-As chaves sao definidas diretamente nas chamadas de localStorage.setItem nos
-useEffect do App.jsx. Nao ha camada de abstracao adicional.
-
---------------------------------------------------------------------------------
-4. CICLO DE VIDA DOS DADOS
---------------------------------------------------------------------------------
-
-4.1 CARREGAMENTO INICIAL
-
-A funcao carregarStorage (App.jsx) e chamada como inicializador lazy do useState:
+Todas as chaves sao sincronizadas automaticamente via useEffect no App.jsx.
+A funcao carregarStorage() e usada como inicializador lazy do useState para
+todas elas, com fallback seguro em caso de JSON corrompido.
 
   function carregarStorage(chave, fallback) {
     try {
@@ -67,177 +68,287 @@ A funcao carregarStorage (App.jsx) e chamada como inicializador lazy do useState
     }
   }
 
-  const [eventos, setEventos] = useState(
-    () => carregarStorage('campuslink_eventos', eventosIniciais)
-  );
-  const [inscritos, setInscritos] = useState(
-    () => carregarStorage('campuslink_inscritos', [])
-  );
-
-- Se o localStorage estiver vazio (primeira visita), usa os dados de
-  src/data/eventos.js como fallback.
-- Se houver dados salvos, os dados do arquivo sao ignorados.
-- O try/catch protege contra JSON corrompido.
-
-4.2 SALVAMENTO AUTOMATICO
-
-Dois useEffect sincronizam os estados com o localStorage a cada mudanca:
-
-  useEffect(() => {
-    localStorage.setItem('campuslink_eventos', JSON.stringify(eventos));
-  }, [eventos]);
-
-  useEffect(() => {
-    localStorage.setItem('campuslink_inscritos', JSON.stringify(inscritos));
-  }, [inscritos]);
-
-Nao e necessario chamar save manualmente em nenhuma operacao — qualquer
-alteracao nos estados dispara automaticamente a gravacao.
-
 --------------------------------------------------------------------------------
-5. CRUD COMPLETO — FUNCOES E LOCALIZACAO
+4. CRUD COMPLETO — FUNCOES E LOCALIZACAO
 --------------------------------------------------------------------------------
 
-5.1 CREATE — Criar evento
+4.1 CREATE — Criar evento
 
-  Funcao:    handleCadastrar(dadosForm)     — App.jsx, linha ~55
-  Disparo:   submit do FormEvento
-  Logica:    Se eventoEditando for null, cria novo objeto com id = Date.now()
-             e adiciona ao array via setEventos(prev => [...prev, novo]).
+  Funcao:    handleCadastrar(dadosForm)     — App.jsx
+  Disparo:   Submit do FormEvento (modo criacao, eventoEditando === null)
+  Logica:    Adiciona novo objeto com id = Date.now() ao array de eventos.
+             Toast de sucesso exibido apos a operacao.
 
-  Fluxo:
-    Usuario clica em "Cadastrar Evento" no Header
-      -> App.jsx seta pagina = 'cadastrar'
-      -> FormEvento e renderizado sem eventoInicial (modo criacao)
-      -> Usuario preenche e submete
-      -> handleCadastrar adiciona ao estado
-      -> useEffect salva no localStorage
-      -> pagina volta para 'eventos'
+4.2 READ — Ler eventos
 
-5.2 READ — Ler eventos
+  Funcao:    carregarStorage()              — App.jsx
+  Disparo:   Inicializacao lazy do useState (uma unica vez na montagem)
+  Logica:    Le do localStorage; se vazio, usa eventosIniciais como fallback.
 
-  Funcao:    carregarStorage()              — App.jsx, linha ~10
-  Disparo:   Inicializacao do useState (uma unica vez, ao montar o App)
-  Logica:    Le do localStorage; se vazio, retorna eventosIniciais.
+  Filtros aplicados em tempo real:
+    - Por categoria (botoes de filtro)
+    - Por texto: titulo, local, organizador e descricao
+    - Ordenacao: mais proximos (data asc), mais recentes (id desc), mais vagas
 
-  Exibicao:
-    - Todos os eventos: filtrados por categoria e texto de busca em tempo real
-    - Inscricoes do usuario: eventos cujo id esta em inscritos[]
+4.3 UPDATE — Editar evento
 
-5.3 UPDATE — Editar evento
-
-  Funcao:    handleEditar(evento)           — App.jsx, linha ~43
-             handleCadastrar(dadosForm)     — App.jsx, linha ~55 (ramo else)
+  Funcao:    handleEditar(evento) + handleCadastrar(dadosForm)   — App.jsx
   Disparo:   Botao "Editar" no EventCard (so aparece na lista principal)
 
   Estado adicional:
     const [eventoEditando, setEventoEditando] = useState(null);
 
-  Logica do handleEditar:
-    1. Armazena o evento em eventoEditando
-    2. Navega para pagina = 'cadastrar'
-    3. FormEvento recebe eventoInicial = eventoEditando e pre-preenche campos
-       (vagas e convertido para string pois o input type=number espera string)
+  Fluxo:
+    1. handleEditar armazena o evento em eventoEditando e navega para 'cadastrar'
+    2. FormEvento recebe eventoInicial, pre-preenche os campos
+    3. Titulo do form muda para "Editar Evento", botao para "Salvar Alteracoes"
+    4. Ao submeter, handleCadastrar detecta eventoEditando != null e faz map()
+       substituindo o evento pelo id, preservando o id original
+    5. Toast de sucesso exibido; eventoEditando resetado para null
 
-  Logica do handleCadastrar no modo edicao:
-    setEventos(prev => prev.map(ev =>
-      ev.id === eventoEditando.id ? { ...dadosForm, id: eventoEditando.id } : ev
-    ));
-    - O id original e preservado para nao quebrar as inscricoes vinculadas.
-    - eventoEditando e resetado para null apos salvar.
+  Protecao contra saida acidental:
+    FormEvento compara o estado atual do form com o original usando useRef.
+    Se houver alteracoes nao salvas e o usuario clicar em "Descartar" ou
+    "Voltar", um window.confirm bloqueia a saida.
 
-  Cancelar edicao:
-    onVoltar no FormEvento chama setEventoEditando(null) e volta para 'eventos',
-    sem alterar nada.
+4.4 DELETE — Excluir evento
 
-5.4 DELETE — Excluir evento
-
-  Funcao:    handleDeletar(id)              — App.jsx, linha ~49
+  Funcao:    handleDeletar(id) + confirmarDeletar()   — App.jsx
   Disparo:   Botao "Excluir" no EventCard (so aparece na lista principal)
 
-  Logica:
-    setEventos(prev => prev.filter(ev => ev.id !== id));
-    setInscritos(prev => prev.filter(i => i !== id));
+  Fluxo com confirmacao:
+    1. handleDeletar(id) armazena o id em confirmacaoDeletar (nao deleta ainda)
+    2. ModalConfirmacao e renderizado pedindo confirmacao ao usuario
+    3. Se confirmar: remove o evento E as inscricoes vinculadas, exibe toast
+    4. Se cancelar: confirmacaoDeletar volta para null, nada e alterado
 
-  - Remove o evento do array de eventos.
-  - Remove o id do array de inscritos para nao manter referencias orphas.
-  - Os dois useEffect salvam ambos os estados atualizados no localStorage.
+  setEventos(prev => prev.filter(ev => ev.id !== id));
+  setInscritos(prev => prev.filter(i => i !== id));
 
 --------------------------------------------------------------------------------
-6. CONTROLE DE VISIBILIDADE DOS BOTOES ADMIN
+5. FEEDBACK VISUAL — SISTEMA DE TOAST
 --------------------------------------------------------------------------------
 
-Os botoes "Editar" e "Excluir" ficam no EventCard mas so sao renderizados
-quando os props onEditar e/ou onDeletar sao fornecidos:
+Componente:  src/components/Toast.jsx + Toast.module.css
 
-  {(onEditar || onDeletar) && (
-    <div className={styles.acoesAdmin}>
-      {onEditar && <button onClick={() => onEditar(evento)}>Editar</button>}
-      {onDeletar && <button onClick={() => onDeletar(evento.id)}>Excluir</button>}
-    </div>
+O App.jsx mantem um estado { mensagem, tipo } para o toast ativo:
+
+  const [toast, setToast] = useState(null);
+
+  function mostrarToast(mensagem, tipo = 'sucesso') {
+    setToast({ mensagem, tipo });
+    setTimeout(() => setToast(null), 3000);
+  }
+
+Tipos disponiveis e quando sao usados:
+
+  Tipo       Cor           Acao
+  ----------------------------------------------------------
+  sucesso    verde         Cadastrar evento, editar evento
+  info       azul claro    Cancelar inscricao, excluir evento
+  erro       vermelho      (reservado para erros futuros)
+
+O toast aparece no canto inferior direito, acima do botao de tema, com
+animacao slideIn (fade + translateY). Some automaticamente apos 3 segundos.
+
+--------------------------------------------------------------------------------
+6. MODAL DE CONFIRMACAO
+--------------------------------------------------------------------------------
+
+Componente:  src/components/ModalConfirmacao.jsx + ModalConfirmacao.module.css
+
+Usado exclusivamente antes de excluir um evento. O modal e renderizado
+condicionalmente no App.jsx quando confirmacaoDeletar !== null:
+
+  {confirmacaoDeletar !== null && (
+    <ModalConfirmacao
+      mensagem="Tem certeza que deseja excluir este evento?..."
+      onConfirmar={confirmarDeletar}
+      onCancelar={() => setConfirmacaoDeletar(null)}
+    />
   )}
 
-Contexto de uso:
-
-  Pagina "Eventos" (lista principal):
-    <EventCard onEditar={handleEditar} onDeletar={handleDeletar} ... />
-    -> Botoes de admin aparecem
-
-  Pagina "Minhas Inscricoes" (MinhasInscricoes.jsx):
-    <EventCard onInscrever={() => {}} onCancelar={onCancelar} ... />
-    -> onEditar e onDeletar nao sao passados -> botoes nao aparecem
-    -> Usuario ve apenas "Ver detalhes" e "Cancelar inscricao"
+O overlay fecha ao clicar fora do modal (onClick no overlay com stopPropagation
+no modal interno). Animacao de entrada: fadeIn no overlay + slideUp no modal.
 
 --------------------------------------------------------------------------------
-7. COMPONENTES E SUAS RESPONSABILIDADES
+7. HISTORICO DE BUSCAS
+--------------------------------------------------------------------------------
+
+Componente:  src/components/CampoBusca.jsx + CampoBusca.module.css
+
+Substitui o <input> simples da pagina de eventos. Comportamentos:
+
+  - Ao focar o campo vazio: dropdown animado exibe ate 5 buscas recentes
+  - Clique em um item: reaaplica o termo de busca
+  - Botao x: remove o item do historico
+  - Salva no historico ao pressionar Enter ou ao sair do campo (onBlur)
+  - Minimo de 2 caracteres para salvar; duplicatas sao movidas para o topo
+  - Maximo de 5 itens (slice(0, 5) apos adicionar novo)
+
+  function salvarBusca(termo) {
+    if (!termo || termo.trim().length < 2) return;
+    setHistoricoBusca(prev => {
+      const filtrado = prev.filter(t => t !== termo.trim());
+      return [termo.trim(), ...filtrado].slice(0, 5);
+    });
+  }
+
+Detalhe tecnico: o dropdown usa onMouseDown (nao onClick) nos botoes internos
+para disparar antes do onBlur do input, evitando que o dropdown feche antes
+do clique ser registrado.
+
+--------------------------------------------------------------------------------
+8. TEMA ESCURO
+--------------------------------------------------------------------------------
+
+O tema e controlado por um atributo no elemento raiz do HTML:
+
+  document.documentElement.setAttribute('data-theme', temaEscuro ? 'dark' : '');
+
+Em index.css, as variaveis CSS do tema escuro sobrepoem as variaveis padrao:
+
+  [data-theme="dark"] {
+    --primary:     #3949ab;
+    --accent:      #7986cb;
+    --bg:          #0e1023;
+    --surface:     #181d3b;
+    --border:      #2a3060;
+    --text:        #e8eaf6;
+    --text-muted:  #7986cb;
+    --tag-bg:      #1e2448;
+    --success:     #66bb6a;
+    --success-bg:  #1a2e1a;
+    --danger:      #ef5350;
+    --danger-bg:   #2e1a1a;
+  }
+
+Como todos os componentes usam var() para cores, o tema escuro funciona
+automaticamente em toda a aplicacao sem alteracoes adicionais nos componentes.
+
+O botao de alternancia fica fixo no canto inferior direito (position: fixed).
+A preferencia e salva no localStorage (chave campuslink_tema) e carregada
+na inicializacao:
+
+  const [temaEscuro, setTemaEscuro] = useState(
+    () => localStorage.getItem('campuslink_tema') === 'escuro'
+  );
+
+--------------------------------------------------------------------------------
+9. ANIMACOES
+--------------------------------------------------------------------------------
+
+9.1 Accordion "Ver detalhes" (EventCard)
+
+  Tecnica: grid-template-rows: 0fr -> 1fr com transition.
+  Esta tecnica anima a altura de forma suave sem precisar de height: auto,
+  que nao pode ser diretamente transicionado no CSS.
+
+  .descricaoWrapper {
+    display: grid;
+    grid-template-rows: 0fr;
+    transition: grid-template-rows 0.38s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .aberto { grid-template-rows: 1fr; }
+
+  O conteudo interno (.descricao) faz fade + slide com delay de 0.05s para
+  sincronizar com a abertura do accordion.
+
+  O chevron (›) no botao rotaciona 90 graus ao expandir, com a mesma
+  curva cubic-bezier para consistencia visual.
+
+9.2 Entrada dos cards na grid
+
+  Cada .card tem animation: cardEntrada 0.35s ease both, que faz os cards
+  aparecerem com fadeUp (opacity 0->1, translateY 14px->0) ao serem
+  renderizados na lista.
+
+9.3 Micro-animacoes gerais
+
+  - Hover do card: translateY(-3px) + sombra dinamica
+  - Botao Inscrever-se: sombra azul no hover
+  - Todos os botoes: scale(0.96) no :active para sensacao de clique fisico
+  - Dropdown do historico de buscas: slideDown (opacity + translateY)
+  - Modal de confirmacao: fadeIn no overlay + slideUp no modal
+
+--------------------------------------------------------------------------------
+10. MELHORIAS DE UX (baseadas em analise heuristica de Nielsen)
+--------------------------------------------------------------------------------
+
+  Problema                          Solucao implementada
+  -----------------------------------------------------------------------
+  Sem feedback apos acoes CRUD      Sistema de Toast (secao 5)
+  Delete irreversivel sem aviso     Modal de confirmacao (secao 6)
+  Saida do form sem salvar          Dirty check com window.confirm
+  Busca so por titulo               Busca em titulo, local, org e descricao
+  Sem ordenacao de eventos          Select: mais proximos / recentes / vagas
+  Empty state sem acao sugerida     Botao "Limpar filtros" no estado vazio
+  Datas no passado em novos eventos min={hoje} no input + validacao no validar()
+  Mensagem de erro de vagas vaga    "Informe um numero inteiro maior que 0"
+  "Cancelar" ambiguo no formulario  Renomeado para "Descartar"
+  Placeholder nao informativo       Indica todos os campos pesquisaveis
+
+--------------------------------------------------------------------------------
+11. COMPONENTES E SUAS RESPONSABILIDADES
 --------------------------------------------------------------------------------
 
   App.jsx
-    - Estado global: eventos, inscritos, eventoEditando, pagina, busca, categoria
-    - Todas as funcoes CRUD
-    - Sincronizacao com localStorage via useEffect
-    - Renderizacao condicional de paginas
+    - Estado global: eventos, inscritos, eventoEditando, historicoBusca,
+      pagina, busca, categoriaAtiva, ordenacao, temaEscuro, toast,
+      confirmacaoDeletar
+    - Todas as funcoes CRUD e handlers de UX
+    - Sincronizacao com localStorage via useEffect (4 chaves)
+    - Renderizacao condicional de paginas e overlays
 
   FormEvento.jsx
     - Formulario controlado com 8 campos
     - Validacao campo a campo antes do submit
     - Modo criacao (eventoInicial = null) ou edicao (eventoInicial = objeto)
-    - Nao conhece localStorage; apenas chama onCadastrar()
+    - Dirty check via useRef para proteger alteracoes nao salvas
+    - Restricao de data minima para novos eventos
 
   EventCard.jsx
     - Exibe dados de um evento
-    - Gerencia estado local de expansao (expandido)
+    - Accordion animado para expandir/recolher detalhes
     - Botoes de inscricao/cancelamento sempre presentes
-    - Botoes de admin condicionais via props
+    - Botoes de admin (Editar/Excluir) condicionais via props
+
+  CampoBusca.jsx
+    - Input de busca com dropdown de historico
+    - Salva termos no localStorage via callback onSalvar
+
+  Toast.jsx
+    - Notificacao temporaria (3s) de feedback de acoes
+    - Tres tipos: sucesso, info, erro
+
+  ModalConfirmacao.jsx
+    - Overlay de confirmacao para acoes destrutivas
+    - Fecha ao clicar fora do modal
 
   MinhasInscricoes.jsx
-    - Lista apenas eventos cujo id esta em inscritos[]
-    - Reutiliza EventCard sem passar props de admin
+    - Lista eventos cujo id esta em inscritos[]
+    - Reutiliza EventCard sem props de admin
 
   Header.jsx
+    - Logo "CampusLink" posicionado a direita
     - Navegacao entre paginas via prop onNavegar
-    - Exibe contador de inscricoes
+    - Badge com contador de inscricoes
 
   Filtro.jsx
-    - Botoes de categoria calculados dinamicamente a partir dos eventos atuais
+    - Botoes de categoria calculados dinamicamente dos eventos atuais
 
 --------------------------------------------------------------------------------
-8. FLUXO COMPLETO DE UMA OPERACAO (EXEMPLO: EDITAR)
+12. VISUAL E IDENTIDADE
 --------------------------------------------------------------------------------
 
-  1. Usuario clica em "Editar" no card do evento X
-  2. EventCard chama onEditar(evento) -> App.jsx: handleEditar(evento)
-  3. App.jsx: setEventoEditando(evento) + setPagina('cadastrar')
-  4. FormEvento e montado com eventoInicial = evento
-  5. useState inicializa form com os dados do evento (vagas como string)
-  6. Titulo muda para "Editar Evento", botao para "Salvar Alteracoes"
-  7. Usuario edita campos e clica em "Salvar Alteracoes"
-  8. handleSubmit valida, chama onCadastrar(dadosForm)
-  9. App.jsx: handleCadastrar detecta eventoEditando != null
-  10. setEventos faz map: substitui o evento pelo id, preserva id original
-  11. setEventoEditando(null)
-  12. useEffect dispara: localStorage.setItem('campuslink_eventos', ...)
-  13. setPagina('eventos') -> usuario ve a lista atualizada
+  Fonte:      Poppins (Google Fonts) — pesos 300 a 800
+              Aplicada globalmente via * { font-family: 'Poppins', sans-serif }
+
+  Paleta:     Azul academico (#1a237e primario, #3949ab acento)
+              Variaveis CSS em :root e [data-theme="dark"]
+
+  Tema:       Claro (padrao) e Escuro, alternado por botao fixo
+              Preferencia persistida em localStorage
 
 ================================================================================
   FIM DA DOCUMENTACAO
