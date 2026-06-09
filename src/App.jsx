@@ -7,7 +7,8 @@ import MinhasInscricoes from './components/MinhasInscricoes';
 import Toast from './components/Toast';
 import ModalConfirmacao from './components/ModalConfirmacao';
 import CampoBusca from './components/CampoBusca';
-import { eventosIniciais } from './data/eventos';
+import Loading from './components/Loading';
+import * as eventoService from './services/eventoService';
 import styles from './App.module.css';
 
 function carregarStorage(chave, fallback) {
@@ -21,7 +22,9 @@ function carregarStorage(chave, fallback) {
 
 export default function App() {
   const [pagina, setPagina] = useState('eventos');
-  const [eventos, setEventos] = useState(() => carregarStorage('campuslink_eventos', eventosIniciais));
+  const [eventos, setEventos] = useState([]);
+  const [carregando, setCarregando] = useState(true);
+  const [erroApi, setErroApi] = useState(null);
   const [inscritos, setInscritos] = useState(() => carregarStorage('campuslink_inscritos', []));
   const [eventoEditando, setEventoEditando] = useState(null);
   const [busca, setBusca] = useState('');
@@ -46,12 +49,25 @@ export default function App() {
   }, [historicoBusca]);
 
   useEffect(() => {
-    localStorage.setItem('campuslink_eventos', JSON.stringify(eventos));
-  }, [eventos]);
-
-  useEffect(() => {
     localStorage.setItem('campuslink_inscritos', JSON.stringify(inscritos));
   }, [inscritos]);
+
+  useEffect(() => {
+    carregarEventos();
+  }, []);
+
+  async function carregarEventos() {
+    try {
+      setCarregando(true);
+      setErroApi(null);
+      const dados = await eventoService.listarEventos();
+      setEventos(dados);
+    } catch (err) {
+      setErroApi(err.message);
+    } finally {
+      setCarregando(false);
+    }
+  }
 
   function salvarBusca(termo) {
     if (!termo || termo.trim().length < 2) return;
@@ -85,25 +101,38 @@ export default function App() {
     setConfirmacaoDeletar(id);
   }
 
-  function confirmarDeletar() {
-    setEventos(prev => prev.filter(ev => ev.id !== confirmacaoDeletar));
-    setInscritos(prev => prev.filter(i => i !== confirmacaoDeletar));
+  async function confirmarDeletar() {
+    const id = confirmacaoDeletar;
     setConfirmacaoDeletar(null);
-    mostrarToast('Evento excluído.', 'info');
+    try {
+      await eventoService.deletarEvento(id);
+      setEventos(prev => prev.filter(ev => ev.id !== id));
+      setInscritos(prev => prev.filter(i => i !== id));
+      mostrarToast('Evento excluído.', 'info');
+    } catch (err) {
+      mostrarToast(err.message, 'erro');
+    }
   }
 
-  function handleCadastrar(dadosForm) {
-    if (eventoEditando) {
-      setEventos(prev => prev.map(ev =>
-        ev.id === eventoEditando.id ? { ...dadosForm, id: eventoEditando.id } : ev
-      ));
-      setEventoEditando(null);
-      mostrarToast('Evento atualizado com sucesso!');
-    } else {
-      setEventos(prev => [...prev, { ...dadosForm, id: Date.now() }]);
-      mostrarToast('Evento cadastrado com sucesso!');
+  async function handleCadastrar(dadosForm) {
+    try {
+      if (eventoEditando) {
+        const atualizado = await eventoService.atualizarEvento(eventoEditando.id, {
+          ...dadosForm,
+          id: eventoEditando.id,
+        });
+        setEventos(prev => prev.map(ev => (ev.id === eventoEditando.id ? atualizado : ev)));
+        setEventoEditando(null);
+        mostrarToast('Evento atualizado com sucesso!');
+      } else {
+        const criado = await eventoService.criarEvento(dadosForm);
+        setEventos(prev => [...prev, criado]);
+        mostrarToast('Evento cadastrado com sucesso!');
+      }
+      setPagina('eventos');
+    } catch (err) {
+      mostrarToast(err.message, 'erro');
     }
-    setPagina('eventos');
   }
 
   const categorias = ['Todos', ...new Set(eventos.map(ev => ev.categoria))];
@@ -149,79 +178,96 @@ export default function App() {
               />
             </section>
 
-            <section className={styles.stats}>
-              <div className={styles.stat}>
-                <strong>{eventos.length}</strong>
-                <span>Eventos disponíveis</span>
-              </div>
-              <div className={styles.stat}>
-                <strong>{inscritos.length}</strong>
-                <span>Suas inscrições</span>
-              </div>
-              <div className={styles.stat}>
-                <strong>{eventos.reduce((acc, ev) => acc + ev.vagas, 0)}</strong>
-                <span>Vagas totais</span>
-              </div>
-            </section>
+            {carregando && <Loading mensagem="Carregando eventos da API..." />}
 
-            <section className={styles.secao}>
-              <div className={styles.secaoHeader}>
-                <h2>Filtrar por categoria</h2>
+            {erroApi && !carregando && (
+              <div className={styles.erro}>
+                <p><strong>Não foi possível conectar à API.</strong></p>
+                <p>{erroApi}</p>
+                <p>Verifique se o servidor está rodando: <code>npm run api</code></p>
+                <button className={styles.btnLimpar} onClick={carregarEventos}>
+                  Tentar novamente
+                </button>
               </div>
-              <Filtro
-                categorias={categorias}
-                selecionada={categoriaAtiva}
-                onSelecionar={setCategoriaAtiva}
-              />
-            </section>
+            )}
 
-            <section className={styles.secao}>
-              <div className={styles.secaoHeader}>
-                <h2>
-                  {categoriaAtiva === 'Todos' ? 'Todos os Eventos' : categoriaAtiva}
-                </h2>
-                <div className={styles.controles}>
-                  <span className={styles.count}>{eventosFiltrados.length} encontrado(s)</span>
-                  <select
-                    className={styles.ordenacaoSelect}
-                    value={ordenacao}
-                    onChange={e => setOrdenacao(e.target.value)}
-                  >
-                    <option value="data">Mais próximos</option>
-                    <option value="recentes">Mais recentes</option>
-                    <option value="vagas">Mais vagas</option>
-                  </select>
-                </div>
-              </div>
+            {!carregando && !erroApi && (
+              <>
+                <section className={styles.stats}>
+                  <div className={styles.stat}>
+                    <strong>{eventos.length}</strong>
+                    <span>Eventos disponíveis</span>
+                  </div>
+                  <div className={styles.stat}>
+                    <strong>{inscritos.length}</strong>
+                    <span>Suas inscrições</span>
+                  </div>
+                  <div className={styles.stat}>
+                    <strong>{eventos.reduce((acc, ev) => acc + ev.vagas, 0)}</strong>
+                    <span>Vagas totais</span>
+                  </div>
+                </section>
 
-              {eventosFiltrados.length === 0 ? (
-                <div className={styles.vazio}>
-                  <p>Nenhum evento encontrado{busca ? ` para "${busca}"` : ''}.</p>
-                  {(busca || categoriaAtiva !== 'Todos') && (
-                    <button
-                      className={styles.btnLimpar}
-                      onClick={() => { setBusca(''); setCategoriaAtiva('Todos'); }}
-                    >
-                      Limpar filtros
-                    </button>
+                <section className={styles.secao}>
+                  <div className={styles.secaoHeader}>
+                    <h2>Filtrar por categoria</h2>
+                  </div>
+                  <Filtro
+                    categorias={categorias}
+                    selecionada={categoriaAtiva}
+                    onSelecionar={setCategoriaAtiva}
+                  />
+                </section>
+
+                <section className={styles.secao}>
+                  <div className={styles.secaoHeader}>
+                    <h2>
+                      {categoriaAtiva === 'Todos' ? 'Todos os Eventos' : categoriaAtiva}
+                    </h2>
+                    <div className={styles.controles}>
+                      <span className={styles.count}>{eventosFiltrados.length} encontrado(s)</span>
+                      <select
+                        className={styles.ordenacaoSelect}
+                        value={ordenacao}
+                        onChange={e => setOrdenacao(e.target.value)}
+                      >
+                        <option value="data">Mais próximos</option>
+                        <option value="recentes">Mais recentes</option>
+                        <option value="vagas">Mais vagas</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  {eventosFiltrados.length === 0 ? (
+                    <div className={styles.vazio}>
+                      <p>Nenhum evento encontrado{busca ? ` para "${busca}"` : ''}.</p>
+                      {(busca || categoriaAtiva !== 'Todos') && (
+                        <button
+                          className={styles.btnLimpar}
+                          onClick={() => { setBusca(''); setCategoriaAtiva('Todos'); }}
+                        >
+                          Limpar filtros
+                        </button>
+                      )}
+                    </div>
+                  ) : (
+                    <div className={styles.grid}>
+                      {eventosFiltrados.map(ev => (
+                        <EventCard
+                          key={ev.id}
+                          evento={ev}
+                          inscrito={inscritos.includes(ev.id)}
+                          onInscrever={handleInscrever}
+                          onCancelar={handleCancelar}
+                          onEditar={handleEditar}
+                          onDeletar={handleDeletar}
+                        />
+                      ))}
+                    </div>
                   )}
-                </div>
-              ) : (
-                <div className={styles.grid}>
-                  {eventosFiltrados.map(ev => (
-                    <EventCard
-                      key={ev.id}
-                      evento={ev}
-                      inscrito={inscritos.includes(ev.id)}
-                      onInscrever={handleInscrever}
-                      onCancelar={handleCancelar}
-                      onEditar={handleEditar}
-                      onDeletar={handleDeletar}
-                    />
-                  ))}
-                </div>
-              )}
-            </section>
+                </section>
+              </>
+            )}
           </>
         )}
 

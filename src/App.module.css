@@ -104,6 +104,30 @@
   gap: 16px;
 }
 
+/* Erro da API */
+.erro {
+  background: var(--danger-bg);
+  border: 1px solid var(--danger);
+  border-radius: 12px;
+  padding: 24px;
+  text-align: center;
+  color: var(--danger);
+  margin-bottom: 24px;
+}
+
+.erro p {
+  margin-bottom: 8px;
+  font-size: 14px;
+}
+
+.erro code {
+  background: var(--surface);
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-family: monospace;
+  color: var(--text);
+}
+
 /* Vazio */
 .vazio {
   text-align: center;

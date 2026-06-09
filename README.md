@@ -23,10 +23,20 @@ A **CampusLink** resolve um problema real de instituições de ensino: a falta d
 git clone https://github.com/itallolugon/campuslink.git
 cd campuslink
 npm install
-npm run dev
+npm start
 ```
 
-Acesse: `http://localhost:5173`
+O comando `npm start` sobe **dois serviços** ao mesmo tempo via `concurrently`:
+
+- **API REST** (json-server) em `http://localhost:3001/eventos`
+- **App React** em `http://localhost:5173`
+
+Caso prefira rodar separados (dois terminais):
+
+```bash
+npm run api    # terminal 1 — API REST na porta 3001
+npm run dev    # terminal 2 — Vite dev server na porta 5173
+```
 
 ## 🛠️ Tecnologias
 
@@ -287,3 +297,136 @@ src/
 - A diferença entre estado derivado (calculado na renderização) e estado armazenado, optando por calcular as categorias dinamicamente em vez de mantê-las em estado separado.
 - CSS Modules como solução para evitar conflitos de estilos entre componentes.
 - Renderização condicional de UI com base em props para controlar o que cada perfil de usuário enxerga na mesma tela.
+
+---
+
+## Relatório — Sprint N3
+
+**Data:** Junho de 2025
+
+---
+
+### 1. Objetivo da Sprint
+
+Integrar o front-end React a uma **API RESTful real** com CRUD completo (Create, Read, Update, Delete), substituindo a persistência por `localStorage` para os dados de eventos. Manter `localStorage` apenas para dados específicos do usuário (inscrições, histórico de busca, preferência de tema).
+
+---
+
+### 2. Stack adotada para a API
+
+- **json-server v0.17** — servidor REST de mock, lê/escreve no arquivo `db.json` na raiz do projeto. Roda na porta `3001`.
+- **concurrently v8** — permite subir API + Vite com um único comando (`npm start`).
+- **fetch + async/await** — sem bibliotecas externas (Axios não foi necessário); o `fetch` nativo do navegador cobre todas as operações.
+
+A API expõe os endpoints REST padrão para a entidade `eventos`:
+
+| Verbo | Endpoint | Ação |
+|---|---|---|
+| GET | `/eventos` | Lista todos os eventos |
+| POST | `/eventos` | Cria um novo evento (id auto-gerado pelo json-server) |
+| PUT | `/eventos/:id` | Atualiza um evento existente |
+| DELETE | `/eventos/:id` | Remove um evento |
+
+---
+
+### 3. Arquitetura da integração
+
+#### 3.1 Camada de serviço (`src/services/eventoService.js`)
+
+Toda comunicação HTTP foi centralizada num módulo de serviço. O `App.jsx` nunca chama `fetch` diretamente — ele importa funções do serviço:
+
+```js
+import * as eventoService from './services/eventoService';
+
+const dados = await eventoService.listarEventos();
+const criado = await eventoService.criarEvento(dadosForm);
+const atualizado = await eventoService.atualizarEvento(id, dados);
+await eventoService.deletarEvento(id);
+```
+
+Internamente, cada função usa `fetch` com `async/await` e um helper `tratar()` que lança erro em caso de resposta não-2xx:
+
+```js
+async function tratar(res, mensagemErro) {
+  if (!res.ok) throw new Error(`${mensagemErro} (HTTP ${res.status})`);
+  if (res.status === 204) return null;
+  return res.json();
+}
+```
+
+#### 3.2 Tratamento de erros e estados assíncronos
+
+O `App.jsx` mantém três estados para gerenciar o ciclo de vida da API:
+
+```jsx
+const [eventos, setEventos] = useState([]);
+const [carregando, setCarregando] = useState(true);
+const [erroApi, setErroApi] = useState(null);
+```
+
+- **`carregando`** → mostra um spinner (`Loading.jsx`) durante o fetch inicial
+- **`erroApi`** → exibe mensagem de erro com botão "Tentar novamente" caso a API esteja offline
+- Erros de POST/PUT/DELETE viram **toasts vermelhos** sem quebrar a aplicação
+
+```jsx
+async function confirmarDeletar() {
+  try {
+    await eventoService.deletarEvento(id);
+    setEventos(prev => prev.filter(ev => ev.id !== id));
+    mostrarToast('Evento excluído.', 'info');
+  } catch (err) {
+    mostrarToast(err.message, 'erro');
+  }
+}
+```
+
+#### 3.3 O que ficou no localStorage e o que foi para a API
+
+| Dado | Antes (Sprint N2) | Depois (Sprint N3) |
+|---|---|---|
+| Eventos (CRUD) | localStorage | **API REST** |
+| Inscrições do usuário | localStorage | localStorage (mantido) |
+| Histórico de busca | localStorage | localStorage (mantido) |
+| Preferência de tema | localStorage | localStorage (mantido) |
+
+A decisão de manter inscrições, histórico e tema no `localStorage` foi consciente: são dados **específicos do usuário** (não compartilhados), e como o projeto não tem autenticação, faz mais sentido tratá-los como preferências do navegador.
+
+---
+
+### 4. Como rodar (Sprint N3)
+
+```bash
+npm install
+npm start    # sobe API REST + dev server simultaneamente
+```
+
+A API fica em `http://localhost:3001/eventos` e o app em `http://localhost:5173`.
+
+---
+
+### 5. Arquivos novos e alterados
+
+| Arquivo | Tipo | Função |
+|---|---|---|
+| `db.json` | Novo | Banco de dados JSON (lido/escrito pelo json-server) |
+| `src/services/eventoService.js` | Novo | Camada de serviço com as 4 operações REST |
+| `src/components/Loading.jsx` | Novo | Spinner exibido durante o fetch inicial |
+| `src/components/Loading.module.css` | Novo | Estilos do spinner |
+| `src/App.jsx` | Alterado | Substitui localStorage por chamadas à API, adiciona estados `carregando` e `erroApi` |
+| `src/App.module.css` | Alterado | Estilo do bloco de erro da API |
+| `package.json` | Alterado | Scripts `api` e `start` + deps `json-server` e `concurrently` |
+
+---
+
+### 6. Dificuldades e Aprendizados (Sprint N3)
+
+**Dificuldades:**
+- Decidir o que migrar para a API e o que manter no localStorage — concluímos que dados compartilháveis vão para o servidor, dados do usuário ficam no navegador.
+- Tratar o caso em que a API está offline sem quebrar a UI — resolvido com try/catch no `useEffect` inicial e botão "Tentar novamente".
+- Garantir que o id retornado pelo POST do json-server seja usado no estado em vez do id antigo gerado por `Date.now()`.
+
+**Aprendizados:**
+- Padrão de **camada de serviço**: isolar `fetch` num módulo separado deixa o `App.jsx` focado em estado e UI.
+- `async/await` em handlers de evento React, com try/catch para erros e estados de loading.
+- Como mocking de APIs com json-server acelera o desenvolvimento front-end sem precisar implementar back-end.
+- `concurrently` para orquestrar múltiplos processos no script `npm start`.

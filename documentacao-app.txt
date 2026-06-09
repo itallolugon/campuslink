@@ -1,7 +1,7 @@
 ================================================================================
   CAMPUSLINK — DOCUMENTACAO DO ESTADO ATUAL DO APLICATIVO
-  Foco: CRUD completo, localStorage, UX e funcionalidades adicionais
-  Data: Junho de 2025
+  Foco: API RESTful, CRUD, localStorage, UX e funcionalidades adicionais
+  Data: Junho de 2025 (Sprint N3)
 ================================================================================
 
 --------------------------------------------------------------------------------
@@ -13,9 +13,14 @@ academicos. O estado global e gerenciado exclusivamente no App.jsx e distribuido
 para os componentes filhos via props. Nao ha biblioteca de roteamento nem
 gerenciador de estado externo — tudo e useState/useEffect.
 
-Toda a persistencia de dados usa o localStorage do navegador. Ao fechar e
-reabrir a aba, eventos, inscricoes, historico de busca e preferencia de tema
-continuam intactos.
+A persistencia e dividida em duas camadas:
+
+  - EVENTOS: persistidos em uma API REST (json-server na porta 3001).
+    O CRUD completo (Create, Read, Update, Delete) usa fetch + async/await.
+
+  - DADOS DO USUARIO: inscricoes, historico de busca e preferencia de tema
+    ficam no localStorage do navegador (sao especificos do usuario, sem
+    necessidade de sincronizacao com servidor).
 
 --------------------------------------------------------------------------------
 2. ESTRUTURA DE DADOS
@@ -50,12 +55,15 @@ O historico de busca e um array de strings:
 
   Chave                    Conteudo
   -----------------------------------------------------------------------
-  campuslink_eventos       JSON.stringify(eventos[])        — array de eventos
   campuslink_inscritos     JSON.stringify(inscritos[])      — array de IDs
   campuslink_historico     JSON.stringify(historico[])      — buscas recentes
   campuslink_tema          string: "escuro" ou "claro"      — preferencia visual
 
-Todas as chaves sao sincronizadas automaticamente via useEffect no App.jsx.
+OBSERVACAO: os EVENTOS NAO sao mais persistidos no localStorage. Eles ficam na
+API REST (ver secao 4). O localStorage continua sendo usado apenas para os
+dados especificos do usuario.
+
+As chaves restantes sao sincronizadas automaticamente via useEffect no App.jsx.
 A funcao carregarStorage() e usada como inicializador lazy do useState para
 todas elas, com fallback seguro em caso de JSON corrompido.
 
@@ -69,64 +77,164 @@ todas elas, com fallback seguro em caso de JSON corrompido.
   }
 
 --------------------------------------------------------------------------------
-4. CRUD COMPLETO — FUNCOES E LOCALIZACAO
+4. API RESTful (Sprint N3)
 --------------------------------------------------------------------------------
 
-4.1 CREATE — Criar evento
+4.1 STACK
 
-  Funcao:    handleCadastrar(dadosForm)     — App.jsx
+  - json-server v0.17.4    — servidor REST de mock baseado em arquivo JSON
+  - concurrently v8.2.2    — roda API + dev server num unico comando
+  - fetch nativo           — sem Axios; usa apenas a API web padrao
+  - async/await            — sintaxe linear para chamadas assincronas
+
+4.2 COMO RODAR
+
+  npm start                  # sobe API (porta 3001) e Vite (porta 5173) juntos
+  npm run api                # so a API
+  npm run dev                # so o Vite
+
+4.3 ENDPOINTS
+
+  Verbo    URL                        Acao
+  ---------------------------------------------------------------
+  GET      /eventos                   Lista todos os eventos
+  POST     /eventos                   Cria novo evento (id auto-gerado)
+  PUT      /eventos/:id               Atualiza evento existente
+  DELETE   /eventos/:id               Remove evento
+
+  Todas as respostas sao em JSON. Codigos HTTP usados:
+    200 OK         — sucesso em GET, PUT, DELETE
+    201 Created    — sucesso em POST
+    404 Not Found  — id inexistente
+    500            — erro do servidor
+
+4.4 CAMADA DE SERVICO (src/services/eventoService.js)
+
+  Toda a comunicacao HTTP fica centralizada num modulo de servico. O App.jsx
+  nunca chama fetch diretamente — ele importa funcoes do servico:
+
+    import * as eventoService from './services/eventoService';
+
+    const dados      = await eventoService.listarEventos();
+    const criado     = await eventoService.criarEvento(dadosForm);
+    const atualizado = await eventoService.atualizarEvento(id, dados);
+    await eventoService.deletarEvento(id);
+
+  Helper interno para tratar respostas:
+
+    async function tratar(res, mensagemErro) {
+      if (!res.ok) throw new Error(`${mensagemErro} (HTTP ${res.status})`);
+      if (res.status === 204) return null;
+      return res.json();
+    }
+
+4.5 ESTADOS DE LOADING E ERRO
+
+  O App.jsx mantem dois estados para gerenciar o ciclo de vida da API:
+
+    const [carregando, setCarregando] = useState(true);
+    const [erroApi, setErroApi]       = useState(null);
+
+  Funcao que faz o fetch inicial:
+
+    async function carregarEventos() {
+      try {
+        setCarregando(true);
+        setErroApi(null);
+        const dados = await eventoService.listarEventos();
+        setEventos(dados);
+      } catch (err) {
+        setErroApi(err.message);
+      } finally {
+        setCarregando(false);
+      }
+    }
+
+  Disparada uma vez no useEffect inicial:
+
+    useEffect(() => { carregarEventos(); }, []);
+
+  Comportamento na UI:
+    - carregando === true       -> renderiza <Loading mensagem="..." />
+    - erroApi !== null           -> renderiza bloco vermelho com botao
+                                    "Tentar novamente" (chama carregarEventos)
+    - Erros em POST/PUT/DELETE   -> viram toasts vermelhos sem quebrar a UI
+
+--------------------------------------------------------------------------------
+5. CRUD COMPLETO — FUNCOES E LOCALIZACAO
+--------------------------------------------------------------------------------
+
+Todas as operacoes agora chamam a API REST via eventoService. Os handlers do
+App.jsx sao async functions com try/catch.
+
+5.1 CREATE — Criar evento
+
+  Funcao:    handleCadastrar(dadosForm)     — App.jsx (ramo else)
+  Servico:   eventoService.criarEvento(dadosForm)   -> POST /eventos
   Disparo:   Submit do FormEvento (modo criacao, eventoEditando === null)
-  Logica:    Adiciona novo objeto com id = Date.now() ao array de eventos.
-             Toast de sucesso exibido apos a operacao.
 
-4.2 READ — Ler eventos
+  async function handleCadastrar(dadosForm) {
+    try {
+      ...
+      const criado = await eventoService.criarEvento(dadosForm);
+      setEventos(prev => [...prev, criado]);
+      mostrarToast('Evento cadastrado com sucesso!');
+    } catch (err) {
+      mostrarToast(err.message, 'erro');
+    }
+  }
 
-  Funcao:    carregarStorage()              — App.jsx
-  Disparo:   Inicializacao lazy do useState (uma unica vez na montagem)
-  Logica:    Le do localStorage; se vazio, usa eventosIniciais como fallback.
+  Detalhe: o id e gerado pelo json-server (auto-increment) e retornado no
+  objeto da resposta. O frontend usa esse id para inserir no estado.
 
-  Filtros aplicados em tempo real:
+5.2 READ — Listar eventos
+
+  Funcao:    carregarEventos()              — App.jsx
+  Servico:   eventoService.listarEventos()  -> GET /eventos
+  Disparo:   useEffect inicial (apenas uma vez ao montar o componente)
+
+  Filtros aplicados em tempo real apos receber os dados:
     - Por categoria (botoes de filtro)
     - Por texto: titulo, local, organizador e descricao
     - Ordenacao: mais proximos (data asc), mais recentes (id desc), mais vagas
 
-4.3 UPDATE — Editar evento
+5.3 UPDATE — Editar evento
 
   Funcao:    handleEditar(evento) + handleCadastrar(dadosForm)   — App.jsx
+  Servico:   eventoService.atualizarEvento(id, dados) -> PUT /eventos/:id
   Disparo:   Botao "Editar" no EventCard (so aparece na lista principal)
-
-  Estado adicional:
-    const [eventoEditando, setEventoEditando] = useState(null);
 
   Fluxo:
     1. handleEditar armazena o evento em eventoEditando e navega para 'cadastrar'
     2. FormEvento recebe eventoInicial, pre-preenche os campos
     3. Titulo do form muda para "Editar Evento", botao para "Salvar Alteracoes"
-    4. Ao submeter, handleCadastrar detecta eventoEditando != null e faz map()
-       substituindo o evento pelo id, preservando o id original
-    5. Toast de sucesso exibido; eventoEditando resetado para null
+    4. Ao submeter, handleCadastrar detecta eventoEditando != null
+    5. await eventoService.atualizarEvento(id, dados) faz PUT na API
+    6. setEventos faz map() substituindo o evento pelo id, preservando id
+    7. Toast de sucesso exibido; eventoEditando resetado para null
 
   Protecao contra saida acidental:
     FormEvento compara o estado atual do form com o original usando useRef.
     Se houver alteracoes nao salvas e o usuario clicar em "Descartar" ou
     "Voltar", um window.confirm bloqueia a saida.
 
-4.4 DELETE — Excluir evento
+5.4 DELETE — Excluir evento
 
   Funcao:    handleDeletar(id) + confirmarDeletar()   — App.jsx
+  Servico:   eventoService.deletarEvento(id)  -> DELETE /eventos/:id
   Disparo:   Botao "Excluir" no EventCard (so aparece na lista principal)
 
   Fluxo com confirmacao:
     1. handleDeletar(id) armazena o id em confirmacaoDeletar (nao deleta ainda)
     2. ModalConfirmacao e renderizado pedindo confirmacao ao usuario
-    3. Se confirmar: remove o evento E as inscricoes vinculadas, exibe toast
-    4. Se cancelar: confirmacaoDeletar volta para null, nada e alterado
-
-  setEventos(prev => prev.filter(ev => ev.id !== id));
-  setInscritos(prev => prev.filter(i => i !== id));
+    3. Se confirmar: await deletarEvento(id) faz DELETE na API
+    4. setEventos filtra o evento removido do estado local
+    5. setInscritos filtra a inscricao vinculada (limpeza local)
+    6. Toast "Evento excluido" exibido
+    7. Se cancelar: confirmacaoDeletar volta para null, nada e alterado
 
 --------------------------------------------------------------------------------
-5. FEEDBACK VISUAL — SISTEMA DE TOAST
+6. FEEDBACK VISUAL — SISTEMA DE TOAST
 --------------------------------------------------------------------------------
 
 Componente:  src/components/Toast.jsx + Toast.module.css
@@ -152,7 +260,7 @@ O toast aparece no canto inferior direito, acima do botao de tema, com
 animacao slideIn (fade + translateY). Some automaticamente apos 3 segundos.
 
 --------------------------------------------------------------------------------
-6. MODAL DE CONFIRMACAO
+7. MODAL DE CONFIRMACAO
 --------------------------------------------------------------------------------
 
 Componente:  src/components/ModalConfirmacao.jsx + ModalConfirmacao.module.css
@@ -172,7 +280,7 @@ O overlay fecha ao clicar fora do modal (onClick no overlay com stopPropagation
 no modal interno). Animacao de entrada: fadeIn no overlay + slideUp no modal.
 
 --------------------------------------------------------------------------------
-7. HISTORICO DE BUSCAS
+8. HISTORICO DE BUSCAS
 --------------------------------------------------------------------------------
 
 Componente:  src/components/CampoBusca.jsx + CampoBusca.module.css
@@ -199,7 +307,7 @@ para disparar antes do onBlur do input, evitando que o dropdown feche antes
 do clique ser registrado.
 
 --------------------------------------------------------------------------------
-8. TEMA ESCURO
+9. TEMA ESCURO
 --------------------------------------------------------------------------------
 
 O tema e controlado por um atributo no elemento raiz do HTML:
@@ -235,7 +343,7 @@ na inicializacao:
   );
 
 --------------------------------------------------------------------------------
-9. ANIMACOES
+10. ANIMACOES
 --------------------------------------------------------------------------------
 
 9.1 Accordion "Ver detalhes" (EventCard)
@@ -272,7 +380,7 @@ na inicializacao:
   - Modal de confirmacao: fadeIn no overlay + slideUp no modal
 
 --------------------------------------------------------------------------------
-10. MELHORIAS DE UX (baseadas em analise heuristica de Nielsen)
+11. MELHORIAS DE UX (baseadas em analise heuristica de Nielsen)
 --------------------------------------------------------------------------------
 
   Problema                          Solucao implementada
@@ -289,16 +397,27 @@ na inicializacao:
   Placeholder nao informativo       Indica todos os campos pesquisaveis
 
 --------------------------------------------------------------------------------
-11. COMPONENTES E SUAS RESPONSABILIDADES
+12. COMPONENTES E SUAS RESPONSABILIDADES
 --------------------------------------------------------------------------------
 
   App.jsx
-    - Estado global: eventos, inscritos, eventoEditando, historicoBusca,
-      pagina, busca, categoriaAtiva, ordenacao, temaEscuro, toast,
-      confirmacaoDeletar
-    - Todas as funcoes CRUD e handlers de UX
-    - Sincronizacao com localStorage via useEffect (4 chaves)
-    - Renderizacao condicional de paginas e overlays
+    - Estado global: eventos, carregando, erroApi, inscritos, eventoEditando,
+      historicoBusca, pagina, busca, categoriaAtiva, ordenacao, temaEscuro,
+      toast, confirmacaoDeletar
+    - Todas as funcoes CRUD (async/await) chamando eventoService
+    - Sincronizacao com localStorage via useEffect (3 chaves)
+    - useEffect inicial que chama carregarEventos() (GET /eventos)
+    - Renderizacao condicional de paginas, loading, erro e overlays
+
+  services/eventoService.js
+    - Camada de servico REST com 4 funcoes: listarEventos, criarEvento,
+      atualizarEvento, deletarEvento
+    - Usa fetch nativo + async/await
+    - Helper tratar() centraliza tratamento de respostas HTTP
+
+  Loading.jsx
+    - Spinner circular animado com mensagem customizavel
+    - Usado durante o fetch inicial dos eventos
 
   FormEvento.jsx
     - Formulario controlado com 8 campos
@@ -338,7 +457,7 @@ na inicializacao:
     - Botoes de categoria calculados dinamicamente dos eventos atuais
 
 --------------------------------------------------------------------------------
-12. VISUAL E IDENTIDADE
+13. VISUAL E IDENTIDADE
 --------------------------------------------------------------------------------
 
   Fonte:      Poppins (Google Fonts) — pesos 300 a 800
